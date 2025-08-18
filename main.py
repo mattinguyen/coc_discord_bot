@@ -11,6 +11,9 @@ load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 COC_API =os.getenv("COC_API")
 COC_TOKEN= os.getenv("COC_TOKEN")
+channel_id= os.getenv("channel_id") #Chat channel ID
+guild_id= os.getenv("guild_id") #Server ID
+role_id= os.getenv("role_id") #Role ID
 
 #Set up logging
 logger = logging.getLogger(__name__)
@@ -41,14 +44,14 @@ class ClashOfClans:
         #Set clan tag
         self.clantag = "#UQ22PVUV"
 
-        #Set Clan Role ID
-        self.channel_id = 1402840168603586603 #channel server id
+        #Set Channel ID
+        self.channel_id = channel_id #channel server id
         self.channel = bot.get_channel(self.channel_id)
         #Get server ID
-        self.guild_id = 1402840168603586600
+        self.guild_id = guild_id
         self.guild = bot.get_guild(self.guild_id)
         #get Role ID
-        self.role_id = 1406765640433406024
+        self.role_id = role_id
         self.role = self.guild.get_role(self.role_id)
         
 
@@ -139,7 +142,7 @@ class ClashOfClans:
                                   color=0xFFA500
                                   )
             
-            # Add player avatar if available
+            # Add Clan avatar if available
             if 'clan' in data and data['clan'] and 'badgeUrls' in data['clan']:
                 embed.set_thumbnail(url=data['clan']['badgeUrls']['medium'])
             
@@ -223,9 +226,13 @@ class ClashOfClans:
             
             #Utils
             current_state = None
-            if state and state=='preparation' or 'tbd' or 'something':
+            if state and state=='preparation' or 'inWar' or 'warEnded':
                 if state=='preparation':
                     current_state = "🟡 **Preparation** :3"
+                if state=='inWar':
+                    current_state = "🟢 **In War** :3"
+                if state=='warEnded':
+                    current_state = "🔴 **War Ended** :3"
                     
             if current_state == None:
                 current_state = "*Not in War*"
@@ -300,6 +307,21 @@ class ClashOfClans:
             }
         
     #@ COC role when War Ends
+        """
+        What do we want to do here?
+        perhaps list:
+        ULTRA MVP (12 stars)
+        - Name: {stars}
+        Valevictorian (6 stars)
+        - Name: {stars}
+        5 stars (happy emoji)
+        - Name: {stars}
+        4 stars (figure out emoji)
+        - Name: {stars}
+        etc.
+        
+        need to grabs stars but uh idk where it is
+        """
     def _mention_war_end(self):
         self.encoded_tag = self.clantag.replace("#", "%23")
         self.get_clans_url = self.base_api_url + "/clans/" + f"{self.encoded_tag}" + "/currentwar"
@@ -314,12 +336,61 @@ class ClashOfClans:
             parse_start = self.parse_coc_time(startTime)
 
             dt = (parse_end - parse_start).total_seconds()
+            
+            #Add Clan avatar 
+            if 'clan' in data and data['clan'] and 'badgeUrls' in data['clan']:
+                embed.set_thumbnail(url=data['clan']['badgeUrls']['medium'])
+                
+            #Grab total star per player
+            clan = data.get('clan', [])
+            members_war_stats = []
+            for item in clan:
+                members_name = item.get('members', {}).get('name')
+                members_th_lvl = item.get('members', {}).get('townhallLevel') #ok wait, we need to download img of townhalls then map levels to TH image
+                members_total_stars = item.get('members', {}.get('attacks')).get('stars')
+                members_total_attacks = item.get('members', {}).get(len('attacks')) #count the elements
+                
+                if members_name and members_th_lvl and members_total_stars:
+                    joined_member_stats = " ".join(members_th_lvl, members_name, members_total_stars, members_total_attacks)
+                else:
+                    pass #idk yet lol 
 
+            #condition is true when war is over
             if dt <= 0:
                 embed = discord.Embed(
                     title= "🚨⚔️ **WAR HAS ENDED!!**",
-                    description=f"{self.role.mention} \n**War is live! Make sure to plan your attacks and secure those stars!**",
+                    description=f"{self.role.mention} \n**War has ended! Great effort from everyone—don’t forget to collect your rewards and review the attacks. Let’s learn from this one and get ready for the next!**",
                     color=discord.Color.green()
+                )
+                
+                embed.add_field(
+                    name="**ULTRA MVP** *(12 stars)*",
+                    value=,
+                    inline=,
+                )
+                
+                embed.add_field(
+                    name="**Valedictorian** *(6 stars)*",
+                    value=,
+                    inline=,
+                )
+                
+                embed.add_field(
+                    name="**Honorable** *(5 stars)*",
+                    value=,
+                    inline=,
+                )
+                
+                embed.add_field(
+                    name="**Bums** *(3-4 stars)*",
+                    value=,
+                    inline=,
+                )
+                
+                embed.add_field(
+                    name="**WTF** *(1-2 stars)*",
+                    value=,
+                    inline=,
                 )
             return embed
         else:
