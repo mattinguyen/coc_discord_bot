@@ -29,7 +29,7 @@ intents.guilds = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 class ClashOfClans:
-    def __init__(self):
+    def __init__(self, bot):
         #Define COC request headers
         self.base_api_url = "https://api.clashofclans.com/v1"
         self.header = {"Authorization": f"Bearer {COC_API}"}
@@ -44,15 +44,19 @@ class ClashOfClans:
         #Set clan tag
         self.clantag = "#UQ22PVUV"
 
-        #Set Channel ID
-        self.channel_id = channel_id #channel server id
-        self.channel = bot.get_channel(self.channel_id)
-        #Get server ID
-        self.guild_id = guild_id
-        self.guild = bot.get_guild(self.guild_id)
-        #get Role ID
-        self.role_id = role_id
-        self.role = self.guild.get_role(self.role_id)
+        #Set Channel ID, server ID, Role ID
+        self.bot = bot
+        self.guild = None
+        self.channel = None
+        self.role = None
+
+    #Allow bot to connect first
+    async def setup(self):
+        await bot.wait_until_ready()
+        self.guild = bot.get_guild(self.bot)
+        self.channel = bot.get_channel(channel_id)
+        self.role = self.guild.get_role(role_id)
+
         
 
     #Utils
@@ -352,6 +356,7 @@ class ClashOfClans:
                 
                 if members_name and members_th_lvl and members_total_stars:
                     joined_member_stats = " ".join(members_th_lvl, members_name, members_total_stars, members_total_attacks)
+                    members_war_stats.append(joined_member_stats)
                 else:
                     pass #idk yet lol 
 
@@ -365,10 +370,10 @@ class ClashOfClans:
                 
                 embed.add_field(
                     name="**ULTRA MVP** *(12 stars)*",
-                    value=,
-                    inline=,
+                    value=members_war_stats,
+                    inline=False,
                 )
-                
+                """
                 embed.add_field(
                     name="**Valedictorian** *(6 stars)*",
                     value=,
@@ -392,6 +397,7 @@ class ClashOfClans:
                     value=,
                     inline=,
                 )
+                """
             return embed
         else:
             return {
@@ -406,7 +412,7 @@ GET Player info and Clan info
 #Retrieve player info via tag    
 @bot.command()
 async def ptag(ctx, tag):
-    coc = ClashOfClans()
+    coc = ClashOfClans(bot)
     result = coc._get_player_info(tag)
     if isinstance(result, dict) and "error" in result:
         await ctx.send(f"{result['error']}")
@@ -416,7 +422,7 @@ async def ptag(ctx, tag):
 #Retrieve clan info via clan tag
 @bot.command()
 async def war(ctx, clantag):
-    coc = ClashOfClans()
+    coc = ClashOfClans(bot)
     result = coc._get_clans(clantag)
     if isinstance(result, dict) and "error" in result:
         await ctx.send(f"{result['error']}")
@@ -432,7 +438,7 @@ War Start Utils
 async def check_war_start():
     print("Checking if war started..")
     war_started = False
-    coc = ClashOfClans()
+    coc = ClashOfClans(bot)
     result = coc._mention_war_start()
     channel = coc.channel
 
