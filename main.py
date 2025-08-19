@@ -11,13 +11,20 @@ load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 COC_API =os.getenv("COC_API")
 COC_TOKEN= os.getenv("COC_TOKEN")
-channel_id= os.getenv("channel_id") #Chat channel ID
-guild_id= os.getenv("guild_id") #Server ID
-role_id= os.getenv("role_id") #Role ID
+channel_id= int(os.getenv("channel_id")) #Chat channel ID
+guild_id= int(os.getenv("guild_id")) #Server ID
+role_id= int(os.getenv("role_id")) #Role ID
 
 #Set up logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+logging.basicConfig(
+    filename='discord.log',
+    filemode='a',
+    level=logging.DEBUG,
+    format="%(asctime)s - %(levelname)s -  %(message)s"
+    
+)
 
 #Set up intents
 handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w')
@@ -26,7 +33,10 @@ intents.message_content = True
 intents.members = True
 intents.guilds = True
 
+#Global variables
 bot = commands.Bot(command_prefix='!', intents=intents)
+coc = None
+war_started = False
 
 class ClashOfClans:
     def __init__(self, bot):
@@ -49,17 +59,29 @@ class ClashOfClans:
         self.guild = None
         self.channel = None
         self.role = None
+        
+        #Townhall Discord Emoji Mapping
+        self.th_emoji = {
+            16: "<:Townhall16:1407470511273017454>",
+            15: "<:Townhall15:1407470509267877979>",
+            14: "<:Townhall14:1407470507913379871>",
+            13: "<:Townhall13:1407149752625266688>",
+            12: "<:Townhall12:1407149758543433869>",
+            11: "<:Townhall12:1407149758543433869>",
+            10: "<:Townhall11:1407149756844871711>",
+            9: "<:Townhall9:1407149761026592900>"
+        }
 
     #Allow bot to connect first
     async def setup(self):
         await bot.wait_until_ready()
-        self.guild = bot.get_guild(self.bot)
+        self.guild = bot.get_guild(guild_id)
         self.channel = bot.get_channel(channel_id)
         self.role = self.guild.get_role(role_id)
 
-        
-
-    #Utils
+    """
+    Utils Below
+    """
     def parse_coc_time(self, timestamp):
         if not timestamp or timestamp=='Error':
             return "Unknown Time"
@@ -103,6 +125,13 @@ class ClashOfClans:
             
         except Exception as e:
             return f"Error: {e}"
+    
+    #Takes the THLVL and returns the formatted emoji ID
+    def map_townhall_emojis(self, townhalllvl):
+        try:
+            return self.th_emoji.get('townhalllvl', f'TH{townhalllvl}')
+        except Exception as e:
+            return f"Error {e}"
 
     """
     Bot Functions Below    
@@ -295,20 +324,23 @@ class ClashOfClans:
             #Start time
             startTime = data.get("startTime", "Error") #response -> 20250818T230913.000Z
             parse_start = self.parse_coc_time(startTime) #response -> 2025-08-16 10:00:00+00:00
-            now = datetime.now(timezone.utc)
-            seconds_until_start = (parse_start - now).total_seconds() #need to return timedelta object, not datetime. #timdelta represents a span of time (days, seconds, microseconds)
-            if seconds_until_start >= 0:
-                embed = discord.Embed(
-                    title= "🚨⚔️ **WAR HAS STARTED!!**",
-                    description=f"{self.role.mention} \n**War is live! Make sure to plan your attacks and secure those stars!**",
-                    color=discord.Color.green()
-                )
-                return embed
-        else:
-            return {
-                "error": f"API Error {response_get_clans.status_code}",
-                "detail": response_get_clans.text
-            }
+            if isinstance(parse_start, datetime):
+                now = datetime.now(timezone.utc)
+                seconds_until_start = (parse_start - now).total_seconds() #need to return timedelta object, not datetime. #timdelta represents a span of time (days, seconds, microseconds)
+                if seconds_until_start >= 0:
+                    embed = discord.Embed(
+                        title= "🚨⚔️ **WAR HAS STARTED!!**",
+                        description=f"{self.role.mention} \n**War is live! Make sure to plan your attacks and secure those stars!**",
+                        color=discord.Color.green()
+                    )
+                    return embed
+                else:
+                    return None #War no start yet
+            else:
+                return {
+                    "error": f"Failed to parse time",
+                    "detail": f"Parse result: {parse_start}"
+                }
         
     #@ COC role when War Ends
         """
@@ -326,8 +358,8 @@ class ClashOfClans:
         
         need to grabs stars but uh idk where it is
         """
-    def _mention_war_end(self):
-        self.encoded_tag = self.clantag.replace("#", "%23")
+    def _mention_war_end(self, clantag):
+        self.encoded_tag = clantag.replace("#", "%23")
         self.get_clans_url = self.base_api_url + "/clans/" + f"{self.encoded_tag}" + "/currentwar"
         response_get_clans = requests.get(self.get_clans_url, headers=self.header)  
 
@@ -339,71 +371,91 @@ class ClashOfClans:
             parse_end = self.parse_coc_time(endTime)
             parse_start = self.parse_coc_time(startTime)
 
-            dt = (parse_end - parse_start).total_seconds()
+            if isinstance(parse_end, datetime) and isinstance(parse_start, datetime):
+                dt = (parse_end - parse_start).total_seconds()
+             
+                #Grab total star per player
+                clan = data.get('clan', {}).get('members', [])
+                members_war_stats = []
+                for members in clan:
+                    members_name = members.get('name')
+                    members_th_lvl = members.get('townhallLevel') #ok wait, we need to download img of townhalls then map levels to TH image
+                    member_attack = members.get('attacks', [])
+                    members_total_stars = sum(attack.get('stars', 0) for attack in member_attack)
+                    members_total_attacks = len(member_attack)
+                
+                    if members_name and members_th_lvl is not None: #include 0 stars
+                        #**<:Townhall13:EMOJI_ID_HERE>**
+                        th_emoji = self.map_townhall_emojis(members_th_lvl)
+                        formatted_members_stats = f"**{th_emoji} - {members_name} - {members_total_stars} - {members_total_attacks}**"
+                        members_war_stats.append({
+                            "townhall": f"{th_emoji}",
+                            "members_name": f"{members_name}",
+                            "members_total_stars": f"{members_total_stars}",
+                            "members_total_attacks": f"{members_total_attacks}"
+                        })
+                    else:
+                        logging.error("Error appending member_war_stats!") 
+                #final_members_war_stats = "\n".join(members_war_stats)
+                six_stars = []
+                for members in members_war_stats:
+                    if int(members['members_total_stars']) == 6:
+                        six_stars.append(f"**{members['townhall']} - {members['members_name']} - {members['members_total_stars']} - {members['members_total_attacks']}**")
+                    finalized_six_stars = "\n".join(six_stars)
+                    
+                
+            #print(members_war_stats)
             
-            #Add Clan avatar 
-            if 'clan' in data and data['clan'] and 'badgeUrls' in data['clan']:
-                embed.set_thumbnail(url=data['clan']['badgeUrls']['medium'])
                 
-            #Grab total star per player
-            clan = data.get('clan', [])
-            members_war_stats = []
-            for item in clan:
-                members_name = item.get('members', {}).get('name')
-                members_th_lvl = item.get('members', {}).get('townhallLevel') #ok wait, we need to download img of townhalls then map levels to TH image
-                members_total_stars = item.get('members', {}.get('attacks')).get('stars')
-                members_total_attacks = item.get('members', {}).get(len('attacks')) #count the elements
+            
+                #condition is true when war is over
+                if dt:
+                    embed = discord.Embed(
+                        title= "🚨⚔️ **WAR HAS ENDED!!**",
+                        description=f"{self.role.mention} \n**War has ended! Great effort from everyone—don’t forget to collect your rewards and review the attacks. Let’s learn from this one and get ready for the next!**",
+                        color=discord.Color.green()
+                    )
                 
-                if members_name and members_th_lvl and members_total_stars:
-                    joined_member_stats = " ".join(members_th_lvl, members_name, members_total_stars, members_total_attacks)
-                    members_war_stats.append(joined_member_stats)
-                else:
-                    pass #idk yet lol 
-
-            #condition is true when war is over
-            if dt <= 0:
-                embed = discord.Embed(
-                    title= "🚨⚔️ **WAR HAS ENDED!!**",
-                    description=f"{self.role.mention} \n**War has ended! Great effort from everyone—don’t forget to collect your rewards and review the attacks. Let’s learn from this one and get ready for the next!**",
-                    color=discord.Color.green()
-                )
+                    #Add Clan avatar 
+                    if 'clan' in data and data['clan'] and 'badgeUrls' in data['clan']:
+                        embed.set_thumbnail(url=data['clan']['badgeUrls']['medium'])
                 
-                embed.add_field(
-                    name="**ULTRA MVP** *(12 stars)*",
-                    value=members_war_stats,
-                    inline=False,
-                )
-                """
-                embed.add_field(
-                    name="**Valedictorian** *(6 stars)*",
-                    value=,
-                    inline=,
-                )
+                    embed.add_field(
+                        name="**ULTRA MVP** *(12 stars)*",
+                        value="placeholder", #map this last
+                        inline=True,
+                    )
                 
-                embed.add_field(
-                    name="**Honorable** *(5 stars)*",
-                    value=,
-                    inline=,
-                )
+                    embed.add_field(
+                        name="**Valedictorian** *(6 stars)*",
+                        value=finalized_six_stars,
+                        inline=True,
+                    )
+                    """
+                    embed.add_field(
+                        name="**Honorable** *(5 stars)*",
+                        value=,
+                        inline=,
+                    )
                 
-                embed.add_field(
-                    name="**Bums** *(3-4 stars)*",
-                    value=,
-                    inline=,
-                )
+                    embed.add_field(
+                        name="**Bums** *(3-4 stars)*",
+                        value=,
+                        inline=,
+                    )
                 
-                embed.add_field(
-                    name="**WTF** *(1-2 stars)*",
-                    value=,
-                    inline=,
-                )
-                """
-            return embed
-        else:
-            return {
-                "error": f"API Error {response_get_clans.status_code}",
-                "detail": response_get_clans.text
-            }
+                    embed.add_field(
+                        name="**WTF** *(1-2 stars)*",
+                        value=,
+                        inline=,
+                    )
+                    """
+                    return embed
+            else:
+                return {
+                    "error": "Failed to parse times",
+                    "detail": "Could not parse start/end times"
+                }      
                 
 """
 GET Player info and Clan info
@@ -412,7 +464,7 @@ GET Player info and Clan info
 #Retrieve player info via tag    
 @bot.command()
 async def ptag(ctx, tag):
-    coc = ClashOfClans(bot)
+    global coc
     result = coc._get_player_info(tag)
     if isinstance(result, dict) and "error" in result:
         await ctx.send(f"{result['error']}")
@@ -422,7 +474,7 @@ async def ptag(ctx, tag):
 #Retrieve clan info via clan tag
 @bot.command()
 async def war(ctx, clantag):
-    coc = ClashOfClans(bot)
+    global coc
     result = coc._get_clans(clantag)
     if isinstance(result, dict) and "error" in result:
         await ctx.send(f"{result['error']}")
@@ -430,15 +482,14 @@ async def war(ctx, clantag):
         await ctx.send(embed=result)
 
 """
-War Start Utils 
+War Background Utils 
 """
 
 #Check every minute if war has started
 @tasks.loop(minutes=1)
 async def check_war_start():
-    print("Checking if war started..")
-    war_started = False
-    coc = ClashOfClans(bot)
+    logging.debug("Checking if war STARTED")
+    global war_started, coc
     result = coc._mention_war_start()
     channel = coc.channel
 
@@ -447,13 +498,41 @@ async def check_war_start():
     elif result is not None and not war_started:
         await channel.send(embed=result)
         war_started = True
-
-#@ Role when War starts
-@bot.event
-async def on_ready(): #start backgrounds loops with on_ready event
-    check_war_start.start() #need .start(), a loop doesnt run until .start() is called
+    elif result is None and war_started:
+        war_started = False
+    
+tasks.loop(minutes=1)
+async def check_war_end():
+    logging.debug("Checking if war ENDED")
+    war_ended = False
+    global coc
+    result = coc._mention_war_end()
+    channel = coc.channel
+    
+    if isinstance(result, dict) and 'error' in result:
+        logger.error("Houston we have a problem..")
+    elif result is not None and not war_ended:
+        await channel.send(embed=result)
+        war_ended = True
+    
+@bot.command()
+async def test_war_end(ctx, clantag):
+    global coc
+    result = coc._mention_war_end(clantag)
+    if isinstance(result, dict) and "error" in result:
+        await ctx.send(f"{result['error']}")
+    else:
+        await ctx.send(embed=result)
 
 
 if __name__ == '__main__':
+    coc = ClashOfClans(bot)
+    
+    @bot.event
+    async def on_ready():
+        await coc.setup()
+        logging.info("Clash of Clans setup Finished!")
+        check_war_start.start() #need .start(), a loop doesnt run until .start() is called
+    
     bot.run(DISCORD_TOKEN)
     

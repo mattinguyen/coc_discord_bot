@@ -1,0 +1,15 @@
+2025-08-19 16:48:05,750 - DEBUG -  Starting new HTTPS connection (1): api.clashofclans.com:443
+2025-08-19 16:48:06,127 - DEBUG -  https://api.clashofclans.com:443 "GET /v1 HTTP/1.1" 200 None
+2025-08-19 16:48:06,129 - DEBUG -  on_ready has successfully been registered as an event
+2025-08-19 16:48:06,129 - DEBUG -  Using proactor: IocpProactor
+2025-08-19 16:48:06,129 - INFO -  logging in using static token
+2025-08-19 16:48:06,927 - INFO -  Shard ID None has connected to Gateway (Session ID: 84edf41521ad26c844007666035bcadf).
+2025-08-19 16:48:08,932 - INFO -  Clash of Clans setup Finished!
+2025-08-19 16:48:08,932 - DEBUG -  Checking if war STARTED
+2025-08-19 16:48:08,933 - DEBUG -  Starting new HTTPS connection (1): api.clashofclans.com:443
+2025-08-19 16:48:09,267 - DEBUG -  https://api.clashofclans.com:443 "GET /v1/clans/%23UQ22PVUV/currentwar HTTP/1.1" 200 None
+2025-08-19 16:48:17,047 - DEBUG -  Starting new HTTPS connection (1): api.clashofclans.com:443
+2025-08-19 16:48:17,364 - DEBUG -  https://api.clashofclans.com:443 "GET /v1/clans/%23UQ22PVUV/currentwar HTTP/1.1" 200 None
+2025-08-19 16:49:08,941 - DEBUG -  Checking if war STARTED
+2025-08-19 16:49:08,941 - DEBUG -  Starting new HTTPS connection (1): api.clashofclans.com:443
+2025-08-19 16:49:09,296 - DEBUG -  https://api.clashofclans.com:443 "GET /v1/clans/%23UQ22PVUV/currentwar HTTP/1.1" 200 None
