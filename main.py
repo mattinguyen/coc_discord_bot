@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import os
 import requests
 from datetime import datetime, timezone, time
+from utils import formatting_member_stats
 
 #Load the Tokens/Keys
 load_dotenv()
@@ -62,14 +63,14 @@ class ClashOfClans:
         
         #Townhall Discord Emoji Mapping
         self.th_emoji = {
-            16: "<:Townhall16:1407470511273017454>",
-            15: "<:Townhall15:1407470509267877979>",
-            14: "<:Townhall14:1407470507913379871>",
-            13: "<:Townhall13:1407149752625266688>",
-            12: "<:Townhall12:1407149758543433869>",
-            11: "<:Townhall12:1407149758543433869>",
-            10: "<:Townhall11:1407149756844871711>",
-            9: "<:Townhall9:1407149761026592900>"
+            16: "<:th16:1407470511273017454>",
+            15: "<:th15:1407470509267877979>",
+            14: "<:th14:1407470507913379871>",
+            13: "<:th13:1407149752625266688>",
+            12: "<:th12:1407149758543433869>",
+            11: "<:th12:1407149758543433869>",
+            10: "<:th11:1407149756844871711>",
+            9: "<:th9:1407149761026592900>"
         }
 
     #Allow bot to connect first
@@ -129,10 +130,10 @@ class ClashOfClans:
     #Takes the THLVL and returns the formatted emoji ID
     def map_townhall_emojis(self, townhalllvl):
         try:
-            return self.th_emoji.get('townhalllvl', f'TH{townhalllvl}')
+            return self.th_emoji.get(townhalllvl, "None")
         except Exception as e:
-            return f"Error {e}"
-
+            print(f"Error {e}")
+            return("None (except error)")
     """
     Bot Functions Below    
 
@@ -396,18 +397,9 @@ class ClashOfClans:
                         })
                     else:
                         logging.error("Error appending member_war_stats!") 
-                #final_members_war_stats = "\n".join(members_war_stats)
-                six_stars = []
-                for members in members_war_stats:
-                    if int(members['members_total_stars']) == 6:
-                        six_stars.append(f"**{members['townhall']} - {members['members_name']} - {members['members_total_stars']} - {members['members_total_attacks']}**")
-                    finalized_six_stars = "\n".join(six_stars)
+               
+                finalized_six_stars, finalized_five_stars, finalized_three_four_stars, finalized_one_two_stars = formatting_member_stats(members_war_stats)
                     
-                
-            #print(members_war_stats)
-            
-                
-            
                 #condition is true when war is over
                 if dt:
                     embed = discord.Embed(
@@ -429,27 +421,27 @@ class ClashOfClans:
                     embed.add_field(
                         name="**Valedictorian** *(6 stars)*",
                         value=finalized_six_stars,
-                        inline=True,
+                        inline=False,
                     )
-                    """
+                    
                     embed.add_field(
                         name="**Honorable** *(5 stars)*",
-                        value=,
-                        inline=,
+                        value=finalized_five_stars,
+                        inline=True,
                     )
                 
                     embed.add_field(
                         name="**Bums** *(3-4 stars)*",
-                        value=,
-                        inline=,
+                        value=finalized_three_four_stars,
+                        inline=True,
                     )
                 
                     embed.add_field(
-                        name="**WTF** *(1-2 stars)*",
-                        value=,
-                        inline=,
+                        name="**WTF** *(0-2 stars)*",
+                        value=finalized_one_two_stars,
+                        inline=False,
                     )
-                    """
+                   
                     return embed
             else:
                 return {
