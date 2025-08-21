@@ -73,6 +73,12 @@ class ClashOfClans:
             9: "<:th9:1407149761026592900>"
         }
 
+        #Map Double Accounts
+        self.double_accounts = {
+            
+            
+        }
+
     #Allow bot to connect first
     async def setup(self):
         await bot.wait_until_ready()
@@ -308,6 +314,91 @@ class ClashOfClans:
             "error": f"API Error {response_get_clans.status_code}",
             "detail": response_get_clans.text
         }
+    def _get_war_status(self):
+        self.encoded_tag = self.clantag.replace("#", "%23")
+        self.get_clans_url = self.base_api_url + "/clans/" + f"{self.encoded_tag}" + "/currentwar"
+        response_get_clans = requests.get(self.get_clans_url, headers=self.header)  
+
+        if response_get_clans.status_code == 200:
+            data = response_get_clans.json()
+
+        #Grab total star per player
+            clan = data.get('clan', {}).get('members', [])
+            members_war_stats = []
+            for members in clan:
+                members_name = members.get('name')
+                members_th_lvl = members.get('townhallLevel') #ok wait, we need to download img of townhalls then map levels to TH image
+                member_attack = members.get('attacks', [])
+                members_total_stars = sum(attack.get('stars', 0) for attack in member_attack)
+                members_total_attacks = len(member_attack)
+                
+                if members_name and members_th_lvl is not None: #include 0 stars
+                    #**<:Townhall13:EMOJI_ID_HERE>**
+                    th_emoji = self.map_townhall_emojis(members_th_lvl)
+                    formatted_members_stats = f"**{th_emoji} - {members_name} - {members_total_stars} - {members_total_attacks}**"
+                    members_war_stats.append({
+                        "townhall": f"{th_emoji}",
+                        "members_name": f"{members_name}",
+                        "members_total_stars": f"{members_total_stars}",
+                        "members_total_attacks": f"{members_total_attacks}"
+                    })
+                else:
+                    logging.error("Error appending member_war_stats!") 
+               
+            finalized_twelve_stars, finalized_six_stars, finalized_five_stars, finalized_three_four_stars, finalized_one_two_stars = formatting_member_stats(members_war_stats)
+                    
+            #condition is true when war is over
+            if members_war_stats:
+                embed = discord.Embed(
+                        title= "🚨⚔️ **WAR STATUS**",
+                        description=f"{self.role.mention} \n**WAR IS ON! Time to dominate! Plan your attacks, execute flawlessly, and show them why we're the best clan out there!**",
+                        color=discord.Color.green()
+                    )
+                
+                    #Add Clan avatar 
+                if 'clan' in data and data['clan'] and 'badgeUrls' in data['clan']:
+                        embed.set_thumbnail(url=data['clan']['badgeUrls']['medium'])
+                
+                embed.add_field(
+                    name="**ULTRA MVP** *(12 stars)*",
+                    value=finalized_twelve_stars, #map this last
+                    inline=False,
+                )
+                
+                embed.add_field(
+                    name="**Valedictorian** *(6 stars)*",
+                    value=finalized_six_stars,
+                    inline=True,
+                )
+                    
+                embed.add_field(
+                    name="**Honorable** *(5 stars)*",
+                    value=finalized_five_stars,
+                    inline=True,
+                )
+
+                # Add invisible spacer to force new row
+                embed.add_field(
+                    name="",  # Invisible character
+                    value="", # Invisible character  
+                    inline=False,
+                )
+                
+                embed.add_field(
+                    name="**Bums** *(3-4 stars)*",
+                    value=finalized_three_four_stars,
+                    inline=False,
+                )
+                
+                embed.add_field(
+                    name="**WTF** *(0-2 stars)*",
+                    value=finalized_one_two_stars,
+                    inline=False,
+                )
+                   
+                return embed
+            else:
+                return {"error": "error"}   
 
     """
     On event Functions
@@ -415,7 +506,7 @@ class ClashOfClans:
                     embed.add_field(
                         name="**ULTRA MVP** *(12 stars)*",
                         value="placeholder", #map this last
-                        inline=True,
+                        inline=False,
                     )
                 
                     embed.add_field(
@@ -439,7 +530,7 @@ class ClashOfClans:
                     embed.add_field(
                         name="**WTF** *(0-2 stars)*",
                         value=finalized_one_two_stars,
-                        inline=False,
+                        inline=True,
                     )
                    
                     return embed
@@ -473,6 +564,14 @@ async def war(ctx, clantag):
     else:
         await ctx.send(embed=result)
 
+#Retrieve War Status & Stats
+@bot.command()
+async def wstatus(ctx):
+    result = coc._get_war_status()
+    if isinstance(result, dict) and "error" in result:
+        await ctx.send(f"{result['error']}")
+    else:
+        await ctx.send(embed=result)
 """
 War Background Utils 
 """
