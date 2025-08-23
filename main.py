@@ -38,6 +38,7 @@ intents.guilds = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 coc = None
 war_started = False
+war_ended = False
 
 class ClashOfClans:
     def __init__(self, bot):
@@ -322,8 +323,14 @@ class ClashOfClans:
         if response_get_clans.status_code == 200:
             data = response_get_clans.json()
 
-        #Grab total star per player
             clan = data.get('clan', {}).get('members', [])
+            
+            #If war hasnt started and theres no stats available
+            war_state = data.get('state', "Error")
+            startTime = data.get("startTime", "Error")
+            parse_start = self.parse_coc_time(startTime)
+            finalized_start_time = self.parse_start_time(parse_start)
+            
             members_war_stats = []
             for members in clan:
                 members_name = members.get('name')
@@ -331,6 +338,7 @@ class ClashOfClans:
                 member_attack = members.get('attacks', [])
                 members_total_stars = sum(attack.get('stars', 0) for attack in member_attack)
                 members_total_attacks = len(member_attack)
+                
                 
                 if members_name and members_th_lvl is not None: #include 0 stars
                     #**<:Townhall13:EMOJI_ID_HERE>**
@@ -346,9 +354,26 @@ class ClashOfClans:
                     logging.error("Error appending member_war_stats!") 
                
             finalized_twelve_stars, finalized_six_stars, finalized_five_stars, finalized_three_four_stars, finalized_one_two_stars = formatting_member_stats(members_war_stats)
+            
+            if war_state == 'preparation':
+                embed = discord.Embed(
+                    title="🚨⚔️ **WAR STATUS**",
+                    description="**PREP DAY, WE LOCKED IN! Scope out them ops, call dibs on who you finna smoke, and make sure the homies got troops. We bout to run they whole block tomorrow!**",
+                    color=discord.Color.green()
+                )
+                #Add Clan avatar 
+                if 'clan' in data and data['clan'] and 'badgeUrls' in data['clan']:
+                        embed.set_thumbnail(url=data['clan']['badgeUrls']['medium'])
+                
+                embed.add_field(
+                    name="🟡 **Preparation** :3",
+                    value=finalized_start_time,
+                    inline=True
+                )
+                
+                return embed
                     
-            #condition is true when war is over
-            if members_war_stats:
+            elif members_war_stats and not war_state == 'preparation':
                 embed = discord.Embed(
                         title= "🚨⚔️ **WAR STATUS**",
                         description=f"{self.role.mention} \n**WAR IS ON! Time to dominate! Plan your attacks, execute flawlessly, and show them why we're the best clan out there!**",
@@ -450,8 +475,8 @@ class ClashOfClans:
         
         need to grabs stars but uh idk where it is
         """
-    def _mention_war_end(self, clantag):
-        self.encoded_tag = clantag.replace("#", "%23")
+    def _mention_war_end(self):
+        self.encoded_tag = self.clantag.replace("#", "%23")
         self.get_clans_url = self.base_api_url + "/clans/" + f"{self.encoded_tag}" + "/currentwar"
         response_get_clans = requests.get(self.get_clans_url, headers=self.header)  
 
@@ -459,13 +484,12 @@ class ClashOfClans:
             data = response_get_clans.json()
             startTime = data.get("startTime", 'Error')
             endTime = data.get("endTime", "Error")
-
+            
             parse_end = self.parse_coc_time(endTime)
             parse_start = self.parse_coc_time(startTime)
 
             if isinstance(parse_end, datetime) and isinstance(parse_start, datetime):
-                dt = (parse_end - parse_start).total_seconds()
-             
+                
                 #Grab total star per player
                 clan = data.get('clan', {}).get('members', [])
                 members_war_stats = []
@@ -489,10 +513,14 @@ class ClashOfClans:
                     else:
                         logging.error("Error appending member_war_stats!") 
                
-                finalized_six_stars, finalized_five_stars, finalized_three_four_stars, finalized_one_two_stars = formatting_member_stats(members_war_stats)
+                fianlized_twelve_stars, finalized_six_stars, finalized_five_stars, finalized_three_four_stars, finalized_one_two_stars = formatting_member_stats(members_war_stats)
+                
+                current_time = datetime.now(timezone.utc)
+                time_remaining = (parse_end - current_time).total_seconds()
                     
                 #condition is true when war is over
-                if dt:
+                #either this or if war_state == 'warEnded'
+                if time_remaining <= 0:
                     embed = discord.Embed(
                         title= "🚨⚔️ **WAR HAS ENDED!!**",
                         description=f"{self.role.mention} \n**War has ended! Great effort from everyone—don’t forget to collect your rewards and review the attacks. Let’s learn from this one and get ready for the next!**",
@@ -535,10 +563,7 @@ class ClashOfClans:
                    
                     return embed
             else:
-                return {
-                    "error": "Failed to parse times",
-                    "detail": "Could not parse start/end times"
-                }      
+                return None    
                 
 """
 GET Player info and Clan info
@@ -592,19 +617,20 @@ async def check_war_start():
     elif result is None and war_started:
         war_started = False
     
-tasks.loop(minutes=1)
+@tasks.loop(minutes=1)
 async def check_war_end():
     logging.debug("Checking if war ENDED")
-    war_ended = False
-    global coc
+    global coc, war_ended
     result = coc._mention_war_end()
     channel = coc.channel
     
     if isinstance(result, dict) and 'error' in result:
         logger.error("Houston we have a problem..")
-    elif result is not None and not war_ended:
+    elif result is not None and not war_ended: #When war ends
         await channel.send(embed=result)
         war_ended = True
+    elif result is None and war_ended: #Reset the logic when war ends
+        war_ended = False
     
 @bot.command()
 async def test_war_end(ctx, clantag):
@@ -624,6 +650,7 @@ if __name__ == '__main__':
         await coc.setup()
         logging.info("Clash of Clans setup Finished!")
         check_war_start.start() #need .start(), a loop doesnt run until .start() is called
+        check_war_end.start()
     
     bot.run(DISCORD_TOKEN)
     
