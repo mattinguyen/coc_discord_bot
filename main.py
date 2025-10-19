@@ -6,6 +6,7 @@ import os
 import requests
 from datetime import datetime, timezone, time
 from utils import formatting_member_stats
+from utils_ai import gemini_war_start_message, gemini_war_end_message
 
 #Load the Tokens/Keys
 load_dotenv()
@@ -23,8 +24,7 @@ logging.basicConfig(
     filename='discord.log',
     filemode='a',
     level=logging.DEBUG,
-    format="%(asctime)s - %(levelname)s -  %(message)s"
-    
+    format="%(asctime)s - %(levelname)s -  %(message)s"  
 )
 
 #Set up intents
@@ -64,6 +64,7 @@ class ClashOfClans:
         
         #Townhall Discord Emoji Mapping
         self.th_emoji = {
+            17: "<:th17:1429257394960994445>",
             16: "<:th16:1407470511273017454>",
             15: "<:th15:1407470509267877979>",
             14: "<:th14:1407470507913379871>",
@@ -72,12 +73,6 @@ class ClashOfClans:
             11: "<:th12:1407149758543433869>",
             10: "<:th11:1407149756844871711>",
             9: "<:th9:1407149761026592900>"
-        }
-
-        #Map Double Accounts
-        self.double_accounts = {
-            
-            
         }
 
     #Allow bot to connect first
@@ -337,18 +332,19 @@ class ClashOfClans:
                 members_th_lvl = members.get('townhallLevel') #ok wait, we need to download img of townhalls then map levels to TH image
                 member_attack = members.get('attacks', [])
                 members_total_stars = sum(attack.get('stars', 0) for attack in member_attack)
-                members_total_attacks = len(member_attack)
+                members_attacks = len(member_attack)
                 
                 
                 if members_name and members_th_lvl is not None: #include 0 stars
                     #**<:Townhall13:EMOJI_ID_HERE>**
                     th_emoji = self.map_townhall_emojis(members_th_lvl)
-                    formatted_members_stats = f"**{th_emoji} - {members_name} - {members_total_stars} - {members_total_attacks}**"
+                    formatted_members_stats = f"**{th_emoji} - {members_name} - {members_total_stars} - {members_attacks}**"
                     members_war_stats.append({
+                        "townhall_level": f"{members_th_lvl}",
                         "townhall": f"{th_emoji}",
                         "members_name": f"{members_name}",
                         "members_total_stars": f"{members_total_stars}",
-                        "members_total_attacks": f"{members_total_attacks}"
+                        "members_total_attacks": f"{members_attacks}"
                     })
                 else:
                     logging.error("Error appending member_war_stats!") 
@@ -447,7 +443,7 @@ class ClashOfClans:
                 if seconds_until_start >= 0:
                     embed = discord.Embed(
                         title= "🚨⚔️ **WAR HAS STARTED!!**",
-                        description=f"{self.role.mention} \n**War is live! Make sure to plan your attacks and secure those stars!**",
+                        description=f"{self.role.mention} \n**{gemini_war_start_message()}**",
                         color=discord.Color.green()
                     )
                     return embed
@@ -499,6 +495,7 @@ class ClashOfClans:
                     member_attack = members.get('attacks', [])
                     members_total_stars = sum(attack.get('stars', 0) for attack in member_attack)
                     members_total_attacks = len(member_attack)
+                    war_result = members.get('state')
                 
                     if members_name and members_th_lvl is not None: #include 0 stars
                         #**<:Townhall13:EMOJI_ID_HERE>**
@@ -523,7 +520,7 @@ class ClashOfClans:
                 if time_remaining <= 0:
                     embed = discord.Embed(
                         title= "🚨⚔️ **WAR HAS ENDED!!**",
-                        description=f"{self.role.mention} \n**War has ended! Great effort from everyone—don’t forget to collect your rewards and review the attacks. Let’s learn from this one and get ready for the next!**",
+                        description=f"{self.role.mention} \n**{gemini_war_end_message(war_result)}**",
                         color=discord.Color.green()
                     )
                 
